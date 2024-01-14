@@ -40,8 +40,8 @@ WORKDIR /src/sqlite
 RUN emcc -Oz -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_DISABLE_LFS -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS -DSQLITE_THREADSAFE=0 -DSQLITE_ENABLE_NORMALIZE -c sqlite3.c -o sqlite3.o
 
 FROM build_tool as php_src
-ARG PHP_BRANCH=PHP-8.3.0
-RUN git clone https://github.com/php/php-src.git php-src \
+ARG PHP_BRANCH=PHP-8.3.1
+RUN git clone https://gitee.com/talent518/php-src.git php-src \
 		--branch $PHP_BRANCH \
 		--single-branch \
 		--depth 1

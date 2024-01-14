@@ -14,6 +14,14 @@ I fixed some inconsistencies in the Makefile and removed non-essential things. T
 
 ```
 docker buildx bake
+
+sudo docker build -f Dockerfile .
+
+sudo docker image save 7fef3b2af4a3 -o ~/php-wasm-8.3.1.gz
+
+sudo chmod 777 /home/wstest/php-wasm-8.3.1.gz
+
+
 ```
 
 Builded files will be located in `build/php-web.js` and `build/php-web.wasm`.
