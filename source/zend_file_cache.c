@@ -3169,7 +3169,7 @@ int persistent_startup(char* cache_id, char* file_cache) {
 	ZCG(accel_directives).validate_timestamps = true;
 
 	ZCG(accel_directives).optimization_level = 0x7FFEBFFF;
-	ZCG(accel_directives).opt_debug_level = 0;
+	ZCG(accel_directives).opt_debug_level = ZEND_DUMP_AFTER_PASS_7 | ZEND_DUMP_AFTER_PASS_9 | ZEND_DUMP_AFTER_PASS_11 | ZEND_DUMP_AFTER_PASS_13 | ZEND_DUMP_AFTER_OPTIMIZER;
 	accel_post_startup();
 	return 0;
 }
