@@ -10,3 +10,4 @@ source/phpwasm.vcxproj.user
 
 source/x64/
 .vs/
+opcache/tests/

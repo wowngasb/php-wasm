@@ -4,6 +4,7 @@
 #ifndef TEST_WASM_MAIN
 #include <emscripten.h>
 #else
+#include <direct.h>
 #include "ext/standard/php_standard.h"
 #include "ext/standard/dl_arginfo.h"
 #define EMSCRIPTEN_KEEPALIVE
@@ -14,85 +15,92 @@
 #include "zend_exceptions.h"
 #include "zend_closures.h"
 
+#include "zend_file_cache.h"
+
+#pragma region phpw
+
 void phpw_flush()
 {
-  fprintf(stdout, "\n");
-  fprintf(stderr, "\n");
+	fprintf(stdout, "\n");
+	fprintf(stderr, "\n");
 }
 
-char *EMSCRIPTEN_KEEPALIVE phpw_exec(char *code)
+char* EMSCRIPTEN_KEEPALIVE phpw_exec(char* code)
 {
-  // This sets USE_ZEND_ALLOC=0 to avoid nunmap errors
-  setenv("USE_ZEND_ALLOC", "0", 1);
-  php_embed_init(0, NULL);
-  char *retVal = NULL;
+	// This sets USE_ZEND_ALLOC=0 to avoid nunmap errors
+	setenv("USE_ZEND_ALLOC", "0", 1);
+	php_embed_init(0, NULL);
+	char* retVal = NULL;
 
-  zend_try
-  {
-    zval retZv;
+	zend_try
+	{
+	  zval retZv;
 
-    zend_eval_string(code, &retZv, "php-wasm evaluate expression");
+	  zend_eval_string(code, &retZv, "php-wasm evaluate expression");
 
-    convert_to_string(&retZv);
+	  convert_to_string(&retZv);
 
-    retVal = Z_STRVAL(retZv);
-  } zend_catch {
-  } zend_end_try();
+	  retVal = Z_STRVAL(retZv);
+	} zend_catch{
+	} zend_end_try();
 
-  phpw_flush();
-  php_embed_shutdown();
+	phpw_flush();
+	php_embed_shutdown();
 
-  return retVal;
+	return retVal;
 }
 
-void EMSCRIPTEN_KEEPALIVE phpw_run(char *code)
+void EMSCRIPTEN_KEEPALIVE phpw_run(char* code)
 {
-  setenv("USE_ZEND_ALLOC", "0", 1);
-  php_embed_init(0, NULL);
-  zend_try
-  {
-    zend_eval_string(code, NULL, "php-wasm run script");
-    if(EG(exception))
-    {
-      zend_exception_error(EG(exception), E_ERROR);
-    }
-  } zend_catch {
-    /* int exit_status = EG(exit_status); */
-  } zend_end_try();
+	setenv("USE_ZEND_ALLOC", "0", 1);
+	php_embed_init(0, NULL);
+	zend_try
+	{
+	  zend_eval_string(code, NULL, "php-wasm run script");
+	  if (EG(exception))
+	  {
+		zend_exception_error(EG(exception), E_ERROR);
+	  }
+	} zend_catch{
+		/* int exit_status = EG(exit_status); */
+	} zend_end_try();
 
-  phpw_flush();
-  php_embed_shutdown();
+	phpw_flush();
+	php_embed_shutdown();
 }
 
 int EMBED_SHUTDOWN = 1;
 
-void phpw(char *file)
+void phpw(char* file)
 {
-  setenv("USE_ZEND_ALLOC", "0", 1);
-  if (EMBED_SHUTDOWN == 0) {
-	  php_embed_shutdown();
-  }
+	setenv("USE_ZEND_ALLOC", "0", 1);
+	if (EMBED_SHUTDOWN == 0) {
+		php_embed_shutdown();
+	}
 
-  php_embed_init(0, NULL);
-  EMBED_SHUTDOWN = 0;
-  zend_first_try {
-    zend_file_handle file_handle;
-    zend_stream_init_filename(&file_handle, file);
-    // file_handle.primary_script = 1;
+	php_embed_init(0, NULL);
+	EMBED_SHUTDOWN = 0;
+	zend_first_try{
+	  zend_file_handle file_handle;
+	  zend_stream_init_filename(&file_handle, file);
+	  // file_handle.primary_script = 1;
 
-    if (php_execute_script(&file_handle) == FAILURE) {
-      php_printf("Failed to execute PHP script.\n");
-    }
+	  if (php_execute_script(&file_handle) == FAILURE) {
+		php_printf("Failed to execute PHP script.\n");
+	  }
 
-    zend_destroy_file_handle(&file_handle);
-  } zend_catch {
-    /* int exit_status = EG(exit_status); */
-  } zend_end_try();
+	  zend_destroy_file_handle(&file_handle);
+	} zend_catch{
+		/* int exit_status = EG(exit_status); */
+	} zend_end_try();
 
-  phpw_flush();
-  php_embed_shutdown();
-  EMBED_SHUTDOWN = 1;
+	phpw_flush();
+	php_embed_shutdown();
+	EMBED_SHUTDOWN = 1;
 }
+
+#pragma endregion phpw
+
 
 #ifndef TEST_WASM_MAIN
 
@@ -100,9 +108,9 @@ int main() {
 	return 0;
 }
 
-#endif
+#else
 
-#ifdef TEST_WASM_MAIN
+#pragma region php_embed_init
 
 static char* php_embed_read_cookies(void)
 {
@@ -283,30 +291,106 @@ EMBED_SAPI_API void php_embed_shutdown(void)
 	sapi_shutdown();
 }
 
-#endif
+#pragma endregion php_embed_init
 
-#ifdef TEST_WASM_MAIN
+
+#define ACCELERATOR_PRODUCT_NAME	"Zend OPcache"
+
+int embed_opcache_compile_file(char* name)
+{
+	int ret = -1;
+	zend_file_handle handle;
+	zend_op_array* op_array = NULL;
+	zend_execute_data* orig_execute_data = NULL;
+	uint32_t orig_compiler_options;
+
+	zend_stream_init_filename(&handle, name);
+
+	orig_execute_data = EG(current_execute_data);
+	orig_compiler_options = CG(compiler_options);
+	CG(compiler_options) |= ZEND_COMPILE_WITHOUT_EXECUTION;
+
+	if (CG(compiler_options) & ZEND_COMPILE_PRELOAD) {
+		/* During preloading, a failure in opcache_compile_file() should result in an overall
+		 * preloading failure. Otherwise we may include partially compiled files in the preload
+		 * state. */
+		op_array = persistent_compile_file(&handle, ZEND_INCLUDE);
+	}
+	else {
+		zend_try{
+			op_array = persistent_compile_file(&handle, ZEND_INCLUDE);
+		} zend_catch{
+			EG(current_execute_data) = orig_execute_data;
+			zend_error(E_WARNING, ACCELERATOR_PRODUCT_NAME " could not compile file %s", ZSTR_VAL(handle.filename));
+		} zend_end_try();
+	}
+
+	CG(compiler_options) = orig_compiler_options;
+
+	if (op_array != NULL) {
+		destroy_op_array(op_array);
+		efree(op_array);
+		ret = 1;
+	}
+	else {
+		ret = 0;
+	}
+	zend_destroy_file_handle(&handle);
+	return ret;
+}
 
 int main(int argc, char** argv) {
+	char* cwd = _getcwd(NULL, 0);
+
 	php_win32_init_gettimeofday();
 	php_win32_ioutil_init();
 
 	php_embed_init(argc, argv);
 
-	char* code = "echo phpinfo();";
+	if (argc == 1 || (argc == 2 && strcmp(argv[1], "--phpinfo") == 0) || (argc == 3 && strcmp(argv[1], "--exec") == 0)) {
 
-	zend_try
-	{
-	  zend_eval_string(code, NULL, "php-wasm run script");
-	  if (EG(exception))
-	  {
-		zend_exception_error(EG(exception), E_ERROR);
-	  }
-	} zend_catch{
-		/* int exit_status = EG(exit_status); */
-	} zend_end_try();
+		char* code = "echo phpinfo();";
+		if (argc == 3 && strcmp(argv[1], "--exec") == 0) {
+			code = argv[2];
+		}
 
+		zend_try
+		{
+		  zend_eval_string(code, NULL, "php-wasm run script");
+		  if (EG(exception))
+		  {
+			zend_exception_error(EG(exception), E_ERROR);
+		  }
+		} zend_catch{
+			/* int exit_status = EG(exit_status); */
+		} zend_end_try();
+	}
+	else if (argc == 3 && strcmp(argv[1], "--opcache-file") == 0) {
+		persistent_startup("embed", cwd);
+		embed_opcache_compile_file(argv[2]);
+	}
+	else if (argc == 3 && strcmp(argv[1], "--run") == 0) {
+		zend_first_try{
+			zend_file_handle file_handle;
+			zend_stream_init_filename(&file_handle, argv[2]);
+			// file_handle.primary_script = 1;
+
+			if (php_execute_script(&file_handle) == FAILURE) {
+				php_printf("Failed to execute PHP script.\n");
+			}
+
+			zend_destroy_file_handle(&file_handle);
+		} zend_catch{
+			/* int exit_status = EG(exit_status); */
+		} zend_end_try();
+	}
+
+	fprintf(stdout, "\n");
+	fprintf(stderr, "\n");
 	php_embed_shutdown();
+	free(cwd);
+
+	system("pause");
 	return 0;
 }
 
