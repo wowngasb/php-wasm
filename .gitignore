@@ -3,10 +3,6 @@ lib
 third_party
 
 source/.vs/
-source/phpwasm.sln
-source/phpwasm.vcxproj
-source/phpwasm.vcxproj.filters
-source/phpwasm.vcxproj.user
 
 source/x64/
 .vs/
